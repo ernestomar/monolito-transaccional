@@ -2,6 +2,9 @@ package bo.edu.ucb.monolito.accounting.bl;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
 import bo.edu.ucb.monolito.accounting.dto.JournalDto;
 import bo.edu.ucb.monolito.accounting.entity.Journal;
 import bo.edu.ucb.monolito.accounting.repository.JournalRepository;
@@ -16,6 +19,7 @@ public class RegisterJournal {
     @Autowired
     private JournalRepository journalRepository;
     
+    @Transactional(propagation = Propagation.REQUIRED)
     public Journal registerJournal(JournalDto journalDto) {
         // Validaciones básicas
         if (journalDto == null) {

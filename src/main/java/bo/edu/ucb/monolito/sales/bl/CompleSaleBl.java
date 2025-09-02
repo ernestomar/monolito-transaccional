@@ -5,9 +5,16 @@ import bo.edu.ucb.monolito.sales.repository.SaleRepository;
 import bo.edu.ucb.monolito.warehouse.dto.ProductDto;
 import bo.edu.ucb.monolito.warehouse.bl.ProductStockBl;
 import bo.edu.ucb.monolito.warehouse.entity.Product;
+import bo.edu.ucb.monolito.accounting.bl.RegisterJournal;
+import bo.edu.ucb.monolito.accounting.dto.JournalDto;
+import bo.edu.ucb.monolito.accounting.entity.Journal;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Service
@@ -18,6 +25,9 @@ public class CompleSaleBl {
     
     @Autowired
     private ProductStockBl productStockBl;
+    
+    @Autowired
+    private RegisterJournal registerJournal;
 
     /**
      * Creates a new Sale based on ProductDto information
@@ -60,6 +70,7 @@ public class CompleSaleBl {
      * @param quantity The quantity to sell
      * @return The persisted Sale entity with generated ID
      */
+    @Transactional(propagation = Propagation.REQUIRED)
     public Sale createAndSaveSale(ProductDto productDto, Integer quantity) {
         // Validate product exists and has sufficient stock using ProductStockBl
         Product product = productStockBl.getProductById(productDto.getId());
@@ -79,10 +90,72 @@ public class CompleSaleBl {
         product.setStockQuantity(product.getStockQuantity() - quantity);
         productStockBl.updateProductStock(product);
         
+        // Registra el diario contable
+        registerSaleInJournal(sale);
+
         // Persist the sale
         return saleRepository.save(sale);
     }
     
+
+    /**
+     * Registers accounting entries for a sale transaction
+     * Creates debit entry for Accounts Receivable and credit entry for Sales Revenue
+     * @param sale The sale to register in the journal
+     */
+    private void registerSaleInJournal(Sale sale) {
+        // Constants for account codes and names
+        final String ACCOUNTS_RECEIVABLE_CODE = "1200";
+        final String ACCOUNTS_RECEIVABLE_NAME = "Cuentas por Cobrar";
+        final String SALES_REVENUE_CODE = "4100";
+        final String SALES_REVENUE_NAME = "Ingresos por Ventas";
+        final String CREATED_BY = "SISTEMA_VENTAS";
+        final String DEPARTMENT = "VENTAS";
+        
+        // Create debit entry for Accounts Receivable
+        JournalDto debitDto = new JournalDto(
+            ACCOUNTS_RECEIVABLE_CODE,
+            ACCOUNTS_RECEIVABLE_NAME,
+            "Venta - " + sale.getSaleNumber() + " - Producto ID: " + sale.getProductId(),
+            sale.getTotalAmount(),
+            "D", // Debit
+            CREATED_BY
+        );
+        debitDto.setReferenceNumber(sale.getSaleNumber());
+        debitDto.setDepartment(DEPARTMENT);
+        debitDto.setTransactionDate(LocalDate.now());
+        debitDto.setNotes("Registro automático por venta de producto");
+        
+        // Create credit entry for Sales Revenue
+        JournalDto creditDto = new JournalDto(
+            SALES_REVENUE_CODE,
+            SALES_REVENUE_NAME,
+            "Venta - " + sale.getSaleNumber() + " - Producto ID: " + sale.getProductId(),
+            sale.getTotalAmount(),
+            "C", // Credit
+            CREATED_BY
+        );
+        creditDto.setReferenceNumber(sale.getSaleNumber());
+        creditDto.setDepartment(DEPARTMENT);
+        creditDto.setTransactionDate(LocalDate.now());
+        creditDto.setNotes("Registro automático por venta de producto");
+        
+        // Register both journal entries
+        try {
+            Journal debitJournal = registerJournal.registerJournal(debitDto);
+            Journal creditJournal = registerJournal.registerJournal(creditDto);
+            
+            // Log successful registration (optional)
+            System.out.println("Registered journal entries for sale " + sale.getSaleNumber() + 
+                             ": Debit JE-" + debitJournal.getJournalEntryNumber() + 
+                             ", Credit JE-" + creditJournal.getJournalEntryNumber());
+        } catch (Exception e) {
+            // Log error but don't fail the sale transaction
+            System.err.println("Error registering journal entries for sale " + sale.getSaleNumber() + ": " + e.getMessage());
+            // In a production system, you might want to implement a compensation mechanism
+            // or queue the journal entries for retry
+        }
+    }
 
     /**
      * Finds a sale by its sale number

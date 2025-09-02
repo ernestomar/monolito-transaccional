@@ -2,6 +2,8 @@ package bo.edu.ucb.monolito.warehouse.bl;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import bo.edu.ucb.monolito.warehouse.entity.Product;
 import bo.edu.ucb.monolito.warehouse.repository.ProductRepository;
@@ -23,6 +25,7 @@ public class ProductStockBl {
      * @return The updated Product entity
      * @throws IllegalArgumentException if product is null or has invalid data
      */
+    @Transactional(propagation = Propagation.REQUIRED)
     public Product updateProductStock(Product product) {
         if (product == null) {
             throw new IllegalArgumentException("Product cannot be null");
