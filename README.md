@@ -329,6 +329,148 @@ COMMENT ON COLUMN JOURNAL.credit_amount IS 'Monto del crédito';
 COMMENT ON COLUMN JOURNAL.balance_type IS 'Tipo de saldo: D=Débito, C=Crédito';
 ``` 
 
+##### Para probar errores
+
+Para probar que el Journal vamos a crear un trigger que falle cuando el importe tenga 99 centavos, 
+
+```sql
+-- Función trigger que valida montos y falla con 0.99
+CREATE OR REPLACE FUNCTION validate_journal_amounts()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Verificar si debit_amount es exactamente 0.99
+    IF NEW.debit_amount = 0.99 THEN
+        RAISE EXCEPTION 'TRANSACTION_TEST_ERROR: debit_amount no puede ser 0.99 - Prueba de transaccionalidad'
+            USING ERRCODE = 'P0001', 
+                  DETAIL = 'Valor de prueba 0.99 detectado en debit_amount',
+                  HINT = 'Use cualquier valor diferente a 0.99 para debit_amount';
+    END IF;
+    
+    -- Verificar si credit_amount es exactamente 0.99
+    IF NEW.credit_amount = 0.99 THEN
+        RAISE EXCEPTION 'TRANSACTION_TEST_ERROR: credit_amount no puede ser 0.99 - Prueba de transaccionalidad'
+            USING ERRCODE = 'P0001',
+                  DETAIL = 'Valor de prueba 0.99 detectado en credit_amount',
+                  HINT = 'Use cualquier valor diferente a 0.99 para credit_amount';
+    END IF;
+    
+    -- Si todo está bien, permitir la operación
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Crear trigger para INSERT
+CREATE TRIGGER trg_validate_journal_amounts_insert
+    BEFORE INSERT ON JOURNAL
+    FOR EACH ROW
+    EXECUTE FUNCTION validate_journal_amounts();
+
+-- Crear trigger para UPDATE
+CREATE TRIGGER trg_validate_journal_amounts_update
+    BEFORE UPDATE ON JOURNAL
+    FOR EACH ROW
+    EXECUTE FUNCTION validate_journal_amounts();
+```
+
+
+A continuación dos ejemplos de insert uno falla y el otro funciona correctamente.
+
+```sql
+-- Insert 1: Asiento de compra de inventario (débito a inventario, crédito a cuentas por pagar)
+INSERT INTO JOURNAL (
+    journal_entry_number,
+    transaction_date,
+    posting_date,
+    account_code,
+    account_name,
+    description,
+    reference_number,
+    debit_amount,
+    credit_amount,
+    balance_type,
+    department,
+    cost_center,
+    project_code,
+    currency_code,
+    exchange_rate,
+    source_document,
+    created_by,
+    approved_by,
+    approval_date,
+    status,
+    notes
+) VALUES (
+    'JE-2025-003',
+    '2025-09-01',
+    '2025-09-01',
+    '1200',
+    'Inventario de Mercancías',
+    'Compra de inventario según factura #FAC-001234',
+    'FAC-001234',
+    15000.00, 
+    0.99, -- Esto hara que falle 99 centavos
+    'D',
+    'Compras',
+    'CC-001',
+    'PROJ-2025-A',
+    'USD',
+    1.000000,
+    'Factura de Compra #FAC-001234',
+    'juan.perez',
+    'maria.garcia',
+    '2025-09-01 14:30:00',
+    'posted',
+    'Compra de productos electrónicos para restock'
+);
+
+-- Insert 2: Contrapartida del asiento anterior (crédito a cuentas por pagar)
+INSERT INTO JOURNAL (
+    journal_entry_number,
+    transaction_date,
+    posting_date,
+    account_code,
+    account_name,
+    description,
+    reference_number,
+    debit_amount,
+    credit_amount,
+    balance_type,
+    department,
+    cost_center,
+    project_code,
+    currency_code,
+    exchange_rate,
+    source_document,
+    created_by,
+    approved_by,
+    approval_date,
+    status,
+    notes
+) VALUES (
+    'JE-2025-001',
+    '2025-09-01',
+    '2025-09-01',
+    '2100',
+    'Cuentas por Pagar - Proveedores',
+    'Compra de inventario según factura #FAC-001234',
+    'FAC-001234',
+    0.00,
+    15000.00,
+    'C',
+    'Compras',
+    'CC-001',
+    'PROJ-2025-A',
+    'USD',
+    1.000000,
+    'Factura de Compra #FAC-001234',
+    'juan.perez',
+    'maria.garcia',
+    '2025-09-01 14:30:00',
+    'posted',
+    'Obligación pendiente de pago a proveedor TechSupply Inc.'
+);
+```
+
 ### Ventas
 
 En el mismo postgres  cramos las BBDD de ventas
