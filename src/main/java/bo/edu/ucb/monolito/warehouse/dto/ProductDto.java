@@ -11,7 +11,10 @@ import java.math.BigDecimal;
  * Based on the product table schema
  */
 public class ProductDto {
-    
+
+    @NotNull(message = "Product ID is required")
+    private Integer id;
+
     @NotBlank(message = "Product name is required")
     private String name;
     
@@ -34,6 +37,16 @@ public class ProductDto {
     }
     
     // Getters and Setters
+
+    public Integer getId() {
+        return id;
+    }
+    
+    public void setId(Integer id) {
+        this.id = id;
+    }
+
+
     public String getName() {
         return name;
     }

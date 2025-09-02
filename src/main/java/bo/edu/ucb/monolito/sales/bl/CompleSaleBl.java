@@ -55,14 +55,14 @@ public class CompleSaleBl {
      * @param quantity The quantity to sell
      * @return The persisted Sale entity with generated ID
      */
-    public Sale createAndSaveSale(ProductDto productDto, Integer productId, Integer quantity) {
+    public Sale createAndSaveSale(ProductDto productDto, Integer quantity) {
         // Validate stock availability
         if (productDto.getStockQuantity() < quantity) {
             throw new IllegalArgumentException("Insufficient stock. Available: " + productDto.getStockQuantity() + ", Requested: " + quantity);
         }
         
         // Create the sale
-        Sale sale = createSale(productDto, productId, quantity);
+        Sale sale = createSale(productDto, productDto.getId(), quantity);
         
         // Persist the sale
         return saleRepository.save(sale);
