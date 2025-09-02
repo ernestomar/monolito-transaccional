@@ -3,6 +3,8 @@ package bo.edu.ucb.monolito.sales.bl;
 import bo.edu.ucb.monolito.sales.entity.Sale;
 import bo.edu.ucb.monolito.sales.repository.SaleRepository;
 import bo.edu.ucb.monolito.warehouse.dto.ProductDto;
+import bo.edu.ucb.monolito.warehouse.bl.ProductStockBl;
+import bo.edu.ucb.monolito.warehouse.entity.Product;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
@@ -13,6 +15,9 @@ public class CompleSaleBl {
 
     @Autowired
     private SaleRepository saleRepository;
+    
+    @Autowired
+    private ProductStockBl productStockBl;
 
     /**
      * Creates a new Sale based on ProductDto information
@@ -56,13 +61,23 @@ public class CompleSaleBl {
      * @return The persisted Sale entity with generated ID
      */
     public Sale createAndSaveSale(ProductDto productDto, Integer quantity) {
-        // Validate stock availability
-        if (productDto.getStockQuantity() < quantity) {
-            throw new IllegalArgumentException("Insufficient stock. Available: " + productDto.getStockQuantity() + ", Requested: " + quantity);
+        // Validate product exists and has sufficient stock using ProductStockBl
+        Product product = productStockBl.getProductById(productDto.getId());
+        
+        if (product == null) {
+            throw new IllegalArgumentException("Product with ID " + productDto.getId() + " not found");
+        }
+        
+        if (product.getStockQuantity() < quantity) {
+            throw new IllegalArgumentException("Insufficient stock. Available: " + product.getStockQuantity() + ", Requested: " + quantity);
         }
         
         // Create the sale
         Sale sale = createSale(productDto, productDto.getId(), quantity);
+
+        // Disminuye el stock del producto
+        product.setStockQuantity(product.getStockQuantity() - quantity);
+        productStockBl.updateProductStock(product);
         
         // Persist the sale
         return saleRepository.save(sale);
